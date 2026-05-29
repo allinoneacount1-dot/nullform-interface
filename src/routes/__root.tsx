@@ -81,9 +81,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "$NULL — the cult of the void. SIWS auth, live RPC stream, Jupiter V6." },
       { name: "theme-color", content: "#050505" },
       { property: "og:title", content: "NULL FORM // SYS_RESET" },
-      { property: "og:description", content: "Confirm you are nothing." },
+      { property: "og:description", content: "$NULL — the cult of the void. SIWS auth, live RPC stream, Jupiter V6." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "NULL FORM // SYS_RESET" },
+      { name: "twitter:description", content: "$NULL — the cult of the void. SIWS auth, live RPC stream, Jupiter V6." },
     ],
     links: [
       {
