@@ -77,14 +77,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "NULL FORM // SYS_RESET" },
+      { name: "description", content: "$NULL — the cult of the void. SIWS auth, live RPC stream, Jupiter V6." },
+      { name: "theme-color", content: "#050505" },
+      { property: "og:title", content: "NULL FORM // SYS_RESET" },
+      { property: "og:description", content: "Confirm you are nothing." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
