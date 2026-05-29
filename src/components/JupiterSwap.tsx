@@ -65,7 +65,8 @@ export function JupiterSwap() {
       });
       if (!r.ok) throw new Error(`swap_${r.status}`);
       const { swapTransaction } = await r.json();
-      const tx = VersionedTransaction.deserialize(Buffer.from(swapTransaction, "base64"));
+      const bin = Uint8Array.from(atob(swapTransaction), (c) => c.charCodeAt(0));
+      const tx = VersionedTransaction.deserialize(bin);
       const signed = await signTransaction(tx);
       const sig = await connection.sendRawTransaction(signed.serialize(), { maxRetries: 3 });
       setTxSig(sig);
