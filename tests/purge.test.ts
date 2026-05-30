@@ -103,9 +103,8 @@ describe("processPurge — Upstash fixed-window rate limiting", () => {
     const { deps, redis } = buildDeps();
 
     // Each call uses a distinct target so dedupe never short-circuits the rate-limit assertion.
-    const targets = Array.from({ length: PURGE_RATE_LIMIT + 1 }, (_, i) =>
-      i === 0 ? TARGET_X : `${TARGET_X.slice(0, -2)}${(i + 10).toString().padStart(2, "0")}`,
-    );
+    // processPurge does not validate base58 itself (the route does), so synthetic ids are fine.
+    const targets = Array.from({ length: PURGE_RATE_LIMIT + 1 }, (_, i) => `TARGET_${i}`);
 
     for (let i = 0; i < PURGE_RATE_LIMIT; i++) {
       const r = await processPurge({ pubkey: PUBKEY_A, target: targets[i] }, deps);
@@ -128,7 +127,7 @@ describe("processPurge — Upstash fixed-window rate limiting", () => {
   it("isolates rate-limit buckets per operator wallet", async () => {
     const { deps } = buildDeps();
     for (let i = 0; i < PURGE_RATE_LIMIT; i++) {
-      await processPurge({ pubkey: PUBKEY_A, target: `${TARGET_X.slice(0, -2)}${i.toString().padStart(2, "0")}` }, deps);
+      await processPurge({ pubkey: PUBKEY_A, target: `TARGET_${i}` }, deps);
     }
     // Operator A is now saturated; operator B's first request must still succeed.
     const r = await processPurge({ pubkey: PUBKEY_B, target: TARGET_X }, deps);
@@ -140,8 +139,7 @@ describe("processPurge — Upstash fixed-window rate limiting", () => {
 
     // Saturate operator A.
     for (let i = 0; i < PURGE_RATE_LIMIT; i++) {
-      const t = `${TARGET_X.slice(0, -2)}${i.toString().padStart(2, "0")}`;
-      const r = await processPurge({ pubkey: PUBKEY_A, target: t }, deps);
+      const r = await processPurge({ pubkey: PUBKEY_A, target: `TARGET_${i}` }, deps);
       expect(r.ok).toBe(true);
     }
     const blocked = await processPurge({ pubkey: PUBKEY_A, target: TARGET_Y }, deps);
