@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPurgeRouteImport } from './routes/api/purge'
+import { Route as ApiIntelRouteImport } from './routes/api/intel'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,30 +23,39 @@ const ApiPurgeRoute = ApiPurgeRouteImport.update({
   path: '/api/purge',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiIntelRoute = ApiIntelRouteImport.update({
+  id: '/api/intel',
+  path: '/api/intel',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/intel': typeof ApiIntelRoute
   '/api/purge': typeof ApiPurgeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/intel': typeof ApiIntelRoute
   '/api/purge': typeof ApiPurgeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/intel': typeof ApiIntelRoute
   '/api/purge': typeof ApiPurgeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/purge'
+  fullPaths: '/' | '/api/intel' | '/api/purge'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/purge'
-  id: '__root__' | '/' | '/api/purge'
+  to: '/' | '/api/intel' | '/api/purge'
+  id: '__root__' | '/' | '/api/intel' | '/api/purge'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiIntelRoute: typeof ApiIntelRoute
   ApiPurgeRoute: typeof ApiPurgeRoute
 }
 
@@ -65,11 +75,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPurgeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/intel': {
+      id: '/api/intel'
+      path: '/api/intel'
+      fullPath: '/api/intel'
+      preLoaderRoute: typeof ApiIntelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiIntelRoute: ApiIntelRoute,
   ApiPurgeRoute: ApiPurgeRoute,
 }
 export const routeTree = rootRouteImport
