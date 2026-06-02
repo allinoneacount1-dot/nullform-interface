@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "./react-start-stub";
 
 // Returns runtime-public config to the client. These values end up in the
 // browser (WebSocket RPC subscription happens client-side); use a CORS-

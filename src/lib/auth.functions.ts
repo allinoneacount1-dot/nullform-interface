@@ -1,5 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
+import { createServerFn } from "./react-start-stub";
+import { getCookie, setCookie, deleteCookie } from "./react-start-stub";
 import { z } from "zod";
 import nacl from "tweetnacl";
 import bs58 from "bs58";

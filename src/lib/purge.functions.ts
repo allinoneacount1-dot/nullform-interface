@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "./react-start-stub";
 import { z } from "zod";
 import { redis } from "./upstash.server";
 
