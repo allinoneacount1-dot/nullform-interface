@@ -6,6 +6,7 @@ import { JupiterSwap } from "@/components/JupiterSwap";
 import { Redacted } from "@/components/RedactedBlock";
 import { NullWalletProvider } from "@/components/WalletContext";
 import { PurgeProtocol } from "@/components/PurgeProtocol";
+import { IntelHorizon } from "@/components/IntelHorizon";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -96,14 +97,9 @@ function Index() {
               <PurgeProtocol />
             </div>
 
-            <article className="frame-cult p-5 md:col-span-2">
-              <h3 className="mb-4 text-[11px] uppercase tracking-[0.4em] text-glow-bone">DE-CORRUPTED_PROTOCOL // INTEL_DUMP</h3>
-              <div className="grid gap-3 text-[12px] leading-relaxed">
-                <p>vessel <Redacted>0x8000NULL_3F4A21BC</Redacted> entered the horizon at slot <Redacted>301_442_887</Redacted>.</p>
-                <p>operator <Redacted>SIGMA_PRIME</Redacted> recommends a minimum offering of <Redacted>0.044 SOL</Redacted> for descent ritual stability.</p>
-                <p>next purge cycle initiates in <Redacted>00:14:22</Redacted>. hover to break the seal.</p>
-              </div>
-            </article>
+            <div className="md:col-span-2">
+              <IntelHorizon />
+            </div>
           </section>
 
           <footer className="border-t border-border/60 px-6 py-6 text-[10px] uppercase tracking-[0.35em] text-muted-foreground md:px-10">
