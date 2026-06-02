@@ -1,0 +1,10 @@
+{
+  "name": "traced-node-modules",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    ".prisma": "0.0.0",
+    "@prisma/client": "6.19.3"
+  }
+}
