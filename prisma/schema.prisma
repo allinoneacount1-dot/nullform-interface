@@ -1,12 +1,5 @@
-// Prisma schema for NULL FORM — TerminalIntel ledger
-// Runtime client uses @prisma/client/edge + withAccelerate (Workers-safe).
 generator client {
   provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum IntelClassification {
@@ -21,7 +14,7 @@ model TerminalIntel {
   slot           Int?
   headline       String
   body           String
-  // JSON array of { start: number, end: number } spans into `body`.
+  // JSON array of { start: number, end: number } character spans into `body`.
   redactedSpans  Json                @default("[]")
   classification IntelClassification @default(RESTRICTED)
   createdAt      DateTime            @default(now())
