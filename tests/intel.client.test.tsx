@@ -51,17 +51,19 @@ function Entry({ body, spans, revealAll = false }: { body: string; spans: { star
 
 describe("redacted block — client safety", () => {
   it("never includes the unrevealed plaintext in the initial DOM", () => {
-    const body = "operator alpha:CLASSIFIED_KEY_42 and pubkey beta:CLASSIFIED_KEY_99 stay sealed";
+    //                       0         1         2         3         4         5         6         7
+    //                       0123456789012345678901234567890123456789012345678901234567890123456789012345678
+    const body =           "operator alpha:CLASSIFIED_KEY_42 and pubkey beta:CLASSIFIED_KEY_99 stay sealed";
     const spans = [
-      { start: 15, end: 33 }, // CLASSIFIED_KEY_42
-      { start: 51, end: 69 }, // CLASSIFIED_KEY_99
+      { start: 15, end: 32 }, // CLASSIFIED_KEY_42
+      { start: 49, end: 66 }, // CLASSIFIED_KEY_99
     ];
     const html = renderToStaticMarkup(createElement(Entry, { body, spans }));
     expect(html).not.toContain("CLASSIFIED_KEY_42");
     expect(html).not.toContain("CLASSIFIED_KEY_99");
     expect(html).toContain("operator alpha:");
     expect(html).toContain(" and pubkey beta:");
-    // mask glyph present
+    expect(html).toContain(" stay sealed");
     expect(html).toMatch(/█+/);
   });
 

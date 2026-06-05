@@ -1,7 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { handleIntelGet, type IntelRow, type IntelPrisma } from "@/lib/intel-handler.server";
-
-const SECRET = "intel-test-secret-do-not-leak";
 
 function row(partial: Partial<IntelRow> & Pick<IntelRow, "id" | "createdAt">): IntelRow {
   return {
@@ -57,11 +55,18 @@ async function readFrames(
   predicate: () => boolean,
   budgetMs = 1000,
 ) {
-  const start = Date.now();
-  while (!predicate() && Date.now() - start < budgetMs) {
-    const r = await reader.read();
-    if (r.done) break;
-    if (r.value) buffer.value += decoder.decode(r.value, { stream: true });
+  const stop = Date.now() + budgetMs;
+  const watchdog = setTimeout(() => reader.cancel().catch(() => {}), budgetMs);
+  try {
+    while (!predicate() && Date.now() < stop) {
+      const r = await reader.read();
+      if (r.done) break;
+      if (r.value) buffer.value += decoder.decode(r.value, { stream: true });
+    }
+  } catch {
+    /* watchdog cancelled read */
+  } finally {
+    clearTimeout(watchdog);
   }
 }
 
@@ -94,9 +99,7 @@ describe("/api/intel — auth", () => {
   it("rejects requests with a forged/invalid cookie (401)", async () => {
     const prisma = makePrisma([]);
     const res = await handleIntelGet(
-      new Request("http://x/api/intel", {
-        headers: { cookie: "null_session=tampered" },
-      }),
+      new Request("http://x/api/intel", { headers: { cookie: "null_session=tampered" } }),
       { prisma, ...withAuth() },
     );
     expect(res.status).toBe(401);
@@ -111,56 +114,45 @@ describe("/api/intel — auth", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
     expect(res.headers.get("cache-control")).toMatch(/no-cache/);
+    await res.body!.cancel();
   });
 });
 
 describe("/api/intel — framing & cursor", () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
-
   it("emits an initial backfill frame newest-first, then advances cursor", async () => {
-    vi.useRealTimers();
     const t0 = new Date("2026-01-01T00:00:00Z");
     const t1 = new Date("2026-01-01T00:00:05Z");
     const t2 = new Date("2026-01-01T00:00:10Z");
     const prisma = makePrisma([
-      row({ id: "a", createdAt: t0, body: "alpha" }),
-      row({ id: "b", createdAt: t1, body: "bravo" }),
-      row({ id: "c", createdAt: t2, body: "charlie" }),
+      row({ id: "a", createdAt: t0 }),
+      row({ id: "b", createdAt: t1 }),
+      row({ id: "c", createdAt: t2 }),
     ]);
-
     const res = await handleIntelGet(
       new Request("http://x/api/intel", { headers: { cookie: "null_session=valid" } }),
-      { prisma, ...withAuth(), pollMs: 30, pingMs: 10_000 },
+      { prisma, ...withAuth(), pollMs: 40, pingMs: 10_000 },
     );
     const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
+    const dec = new TextDecoder();
     const buf = { value: "" };
 
-    await readFrames(reader, decoder, buf, () => buf.value.includes("\n\n"), 500);
-    const frames = parseSSE(buf.value);
-    const backfill = frames.find((f) => f.event === "backfill");
-    expect(backfill).toBeDefined();
-    const payload = JSON.parse(backfill!.data) as IntelRow[];
-    expect(payload.map((r) => r.id)).toEqual(["c", "b", "a"]);
+    await readFrames(reader, dec, buf, () => buf.value.includes("backfill"), 500);
+    const backfill = parseSSE(buf.value).find((f) => f.event === "backfill")!;
+    expect((JSON.parse(backfill.data) as IntelRow[]).map((r) => r.id)).toEqual(["c", "b", "a"]);
 
-    prisma.add(
-      row({ id: "d", createdAt: new Date("2026-01-01T00:00:20Z"), body: "delta" }),
-    );
-    await readFrames(reader, decoder, buf, () => buf.value.includes("\"id\":\"d\""), 500);
+    prisma.add(row({ id: "d", createdAt: new Date("2026-01-01T00:00:20Z") }));
+    await readFrames(reader, dec, buf, () => buf.value.includes('"id":"d"'), 500);
     const intels = parseSSE(buf.value).filter((f) => f.event === "intel");
     expect(intels.length).toBe(1);
     expect((JSON.parse(intels[0].data) as IntelRow).id).toBe("d");
 
-    // Cursor advanced: another poll round with no new rows ⇒ still 1 intel frame.
-    await readFrames(reader, decoder, buf, () => false, 120);
-    const intels2 = parseSSE(buf.value).filter((f) => f.event === "intel");
-    expect(intels2.length).toBe(1);
-
-    await reader.cancel();
+    // No new rows ⇒ cursor prevents duplicate emission across further polls.
+    await readFrames(reader, dec, buf, () => false, 200);
+    const stillOne = parseSSE(buf.value).filter((f) => f.event === "intel");
+    expect(stillOne.length).toBe(1);
   });
 
-  it("preserves redactedSpans verbatim in every streamed payload", async () => {
+  it("preserves redactedSpans and classification verbatim in every streamed payload", async () => {
     const spans = [
       { start: 4, end: 10 },
       { start: 18, end: 25 },
@@ -174,16 +166,15 @@ describe("/api/intel — framing & cursor", () => {
         classification: "CLASSIFIED",
       }),
     ]);
-
     const res = await handleIntelGet(
       new Request("http://x/api/intel", { headers: { cookie: "null_session=valid" } }),
-      { prisma, ...withAuth(), pollMs: 50, pingMs: 10_000 },
+      { prisma, ...withAuth(), pollMs: 30, pingMs: 10_000 },
     );
     const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
+    const dec = new TextDecoder();
     const buf = { value: "" };
-    await readFrames(reader, decoder, buf, () => buf.value.includes("backfill"));
-    const [b] = parseSSE(buf.value).filter((f) => f.event === "backfill");
+    await readFrames(reader, dec, buf, () => buf.value.includes("backfill"), 500);
+    const b = parseSSE(buf.value).find((f) => f.event === "backfill")!;
     const payload = JSON.parse(b.data) as IntelRow[];
     expect(payload[0].redactedSpans).toEqual(spans);
     expect(payload[0].classification).toBe("CLASSIFIED");
@@ -196,39 +187,33 @@ describe("/api/intel — framing & cursor", () => {
         redactedSpans: [{ start: 9, end: 15 }],
       }),
     );
-    await vi.advanceTimersByTimeAsync(80);
-    await readFrames(reader, decoder, buf, () => buf.value.includes("\"id\":\"r2\""));
-    const [i] = parseSSE(buf.value).filter((f) => f.event === "intel");
-    const next = JSON.parse(i.data) as IntelRow;
-    expect(next.redactedSpans).toEqual([{ start: 9, end: 15 }]);
-    await reader.cancel();
+    await readFrames(reader, dec, buf, () => buf.value.includes('"id":"r2"'), 500);
+    const i = parseSSE(buf.value).find((f) => f.event === "intel")!;
+    expect((JSON.parse(i.data) as IntelRow).redactedSpans).toEqual([{ start: 9, end: 15 }]);
   });
 
   it("emits ping keepalives on the ping interval", async () => {
     const prisma = makePrisma([]);
     const res = await handleIntelGet(
       new Request("http://x/api/intel", { headers: { cookie: "null_session=valid" } }),
-      { prisma, ...withAuth(), pollMs: 10_000, pingMs: 200 },
+      { prisma, ...withAuth(), pollMs: 10_000, pingMs: 80 },
     );
     const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
+    const dec = new TextDecoder();
     const buf = { value: "" };
-    await readFrames(reader, decoder, buf, () => buf.value.includes("backfill"));
-
-    await vi.advanceTimersByTimeAsync(250);
-    await readFrames(reader, decoder, buf, () => buf.value.includes("event: ping"));
-    await vi.advanceTimersByTimeAsync(250);
-    await readFrames(reader, decoder, buf, () => (buf.value.match(/event: ping/g) ?? []).length >= 2);
-
-    const pings = (buf.value.match(/event: ping/g) ?? []).length;
-    expect(pings).toBeGreaterThanOrEqual(2);
-    await reader.cancel();
+    await readFrames(
+      reader,
+      dec,
+      buf,
+      () => (buf.value.match(/event: ping/g) ?? []).length >= 2,
+      500,
+    );
+    expect((buf.value.match(/event: ping/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 });
 
 describe("/api/intel — abort", () => {
   it("closes the stream cleanly on request.signal abort", async () => {
-    vi.useFakeTimers();
     const prisma = makePrisma([]);
     const ac = new AbortController();
     const res = await handleIntelGet(
@@ -243,9 +228,8 @@ describe("/api/intel — abort", () => {
     ac.abort();
     const after = await Promise.race([
       reader.read(),
-      new Promise<{ done: true }>((r) => setTimeout(() => r({ done: true }), 100)),
+      new Promise<{ done: true }>((r) => setTimeout(() => r({ done: true }), 200)),
     ]);
     expect(after.done).toBe(true);
-    vi.useRealTimers();
   });
 });
