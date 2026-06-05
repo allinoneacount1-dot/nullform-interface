@@ -59,14 +59,9 @@ async function readFrames(
 ) {
   const start = Date.now();
   while (!predicate() && Date.now() - start < budgetMs) {
-    const { value, done } = await Promise.race([
-      reader.read(),
-      new Promise<{ value: undefined; done: true }>((res) =>
-        setTimeout(() => res({ value: undefined, done: true }), 50),
-      ),
-    ]);
-    if (done) break;
-    if (value) buffer.value += decoder.decode(value, { stream: true });
+    const r = await reader.read();
+    if (r.done) break;
+    if (r.value) buffer.value += decoder.decode(r.value, { stream: true });
   }
 }
 
