@@ -1,23 +1,33 @@
-// Stub for static SPA build — replaces @tanstack/react-start server functions
-import { z } from "zod";
+// Stub for static SPA build — replaces @tanstack/react-start server functions.
+// Typed as a generic builder so handler return types and zod-inferred input
+// types propagate to callers.
 
-export function createServerFn(opts?: { method?: string }) {
-  return {
-    inputValidator: (_schema: z.ZodType) => ({
-      handler: (_fn: (...args: unknown[]) => unknown) => {
-        return async function clientSideStub() {
-          console.warn("Server function called in static mode — not available");
-          return null;
-        };
-      },
-    }),
-    handler: (_fn: (...args: unknown[]) => unknown) => {
-      return async function clientSideStub() {
-        console.warn("Server function called in static mode — not available");
-        return null;
-      };
+import type { z } from "zod";
+
+type AnyHandler<TInput> = (ctx: { data: TInput }) => unknown;
+
+interface Builder<TInput = unknown> {
+  inputValidator<S>(
+    schema: S,
+  ): Builder<S extends z.ZodType<infer O> ? O : S extends (input: infer I) => infer O ? (O extends I ? O : O) : unknown>;
+  handler<H extends AnyHandler<TInput>>(
+    fn: H,
+  ): (args?: { data: TInput }) => Promise<Awaited<ReturnType<H>>>;
+}
+
+export function createServerFn(_opts?: { method?: string }): Builder {
+  const builder = {
+    inputValidator() {
+      return builder as unknown as Builder;
     },
-  };
+    handler() {
+      return (async () => {
+        console.warn("Server function called in static mode — not available");
+        return null as never;
+      }) as never;
+    },
+  } as unknown as Builder;
+  return builder;
 }
 
 // Cookie stubs for browser

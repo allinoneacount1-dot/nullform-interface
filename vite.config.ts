@@ -12,7 +12,6 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "node:crypto": path.resolve(__dirname, "./src/lib/crypto-stub.ts"),
-      "node:async_hooks": false,
     },
   },
   build: {

@@ -1,5 +1,4 @@
 // Stub for node:crypto — browser-compatible no-op for static SPA build
-import { randomBytes as _randomBytes } from "crypto-browserify";
 
 export function createHmac(_algo: string, _key: string) {
   return {
