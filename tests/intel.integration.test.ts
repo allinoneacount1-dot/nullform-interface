@@ -124,6 +124,7 @@ describe("/api/intel — framing & cursor", () => {
   afterEach(() => vi.useRealTimers());
 
   it("emits an initial backfill frame newest-first, then advances cursor", async () => {
+    vi.useRealTimers();
     const t0 = new Date("2026-01-01T00:00:00Z");
     const t1 = new Date("2026-01-01T00:00:05Z");
     const t2 = new Date("2026-01-01T00:00:10Z");
@@ -135,35 +136,29 @@ describe("/api/intel — framing & cursor", () => {
 
     const res = await handleIntelGet(
       new Request("http://x/api/intel", { headers: { cookie: "null_session=valid" } }),
-      { prisma, ...withAuth(), pollMs: 100, pingMs: 10_000 },
+      { prisma, ...withAuth(), pollMs: 30, pingMs: 10_000 },
     );
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     const buf = { value: "" };
 
-    await readFrames(reader, decoder, buf, () => buf.value.includes("\n\n"));
+    await readFrames(reader, decoder, buf, () => buf.value.includes("\n\n"), 500);
     const frames = parseSSE(buf.value);
     const backfill = frames.find((f) => f.event === "backfill");
     expect(backfill).toBeDefined();
     const payload = JSON.parse(backfill!.data) as IntelRow[];
     expect(payload.map((r) => r.id)).toEqual(["c", "b", "a"]);
 
-    // Add a newer row; advance time past pollMs; expect exactly one new
-    // `intel` frame with that row and no duplicates of backfilled ids.
     prisma.add(
       row({ id: "d", createdAt: new Date("2026-01-01T00:00:20Z"), body: "delta" }),
     );
-    await vi.advanceTimersByTimeAsync(150);
-    await readFrames(reader, decoder, buf, () => buf.value.includes("\"id\":\"d\""));
-    const all = parseSSE(buf.value);
-    const intels = all.filter((f) => f.event === "intel");
+    await readFrames(reader, decoder, buf, () => buf.value.includes("\"id\":\"d\""), 500);
+    const intels = parseSSE(buf.value).filter((f) => f.event === "intel");
     expect(intels.length).toBe(1);
-    const newRow = JSON.parse(intels[0].data) as IntelRow;
-    expect(newRow.id).toBe("d");
+    expect((JSON.parse(intels[0].data) as IntelRow).id).toBe("d");
 
-    // Cursor progression: another poll round with no new rows ⇒ no new intel frames.
-    await vi.advanceTimersByTimeAsync(150);
-    await readFrames(reader, decoder, buf, () => false, 50);
+    // Cursor advanced: another poll round with no new rows ⇒ still 1 intel frame.
+    await readFrames(reader, decoder, buf, () => false, 120);
     const intels2 = parseSSE(buf.value).filter((f) => f.event === "intel");
     expect(intels2.length).toBe(1);
 

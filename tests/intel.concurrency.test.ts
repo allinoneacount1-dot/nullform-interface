@@ -18,7 +18,7 @@ function makeAuth() {
 
 function fakePrisma(behavior: {
   initial?: IntelRow[];
-  delayMs?: number;
+  pollDelayMs?: number;
   throwOn?: "backfill" | "poll" | "never";
   throwAfter?: number;
 }): IntelPrisma {
@@ -33,7 +33,7 @@ function fakePrisma(behavior: {
         if (behavior.throwOn === "poll" && !isBackfill && pollCount > (behavior.throwAfter ?? 0)) {
           throw new Error("prisma_timeout_poll");
         }
-        if (behavior.delayMs) await new Promise((r) => setTimeout(r, behavior.delayMs));
+        if (!isBackfill && behavior.pollDelayMs) await new Promise((r) => setTimeout(r, behavior.pollDelayMs));
         if (isBackfill) return [...initial].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         return [];
       },
