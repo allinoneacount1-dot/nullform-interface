@@ -1,31 +1,32 @@
 // Stub for static SPA build — replaces @tanstack/react-start server functions.
-// Typed as a generic builder so handler return types propagate through to
-// callers (e.g. `getNullConfig()` keeps its `{ mint, rpcHttp, rpcWs }` shape
-// instead of collapsing to `null`).
+// Typed as a generic builder so handler return types and zod-inferred input
+// types propagate to callers.
 
-type AnyHandler = (ctx: { data: unknown }) => unknown;
+import type { z } from "zod";
+
+type AnyHandler<TInput> = (ctx: { data: TInput }) => unknown;
 
 interface Builder<TInput = unknown> {
-  inputValidator<T>(schema: T): Builder<T>;
-  handler<H extends AnyHandler>(
+  inputValidator<S>(
+    schema: S,
+  ): Builder<S extends z.ZodType<infer O> ? O : S extends (input: infer I) => infer O ? (O extends I ? O : O) : unknown>;
+  handler<H extends AnyHandler<TInput>>(
     fn: H,
-  ): (
-    args?: { data: TInput },
-  ) => Promise<Awaited<ReturnType<H>>>;
+  ): (args?: { data: TInput }) => Promise<Awaited<ReturnType<H>>>;
 }
 
 export function createServerFn(_opts?: { method?: string }): Builder {
-  const builder: Builder = {
+  const builder = {
     inputValidator() {
-      return builder as Builder;
+      return builder as unknown as Builder;
     },
-    handler(_fn) {
+    handler() {
       return (async () => {
         console.warn("Server function called in static mode — not available");
         return null as never;
       }) as never;
     },
-  };
+  } as unknown as Builder;
   return builder;
 }
 
