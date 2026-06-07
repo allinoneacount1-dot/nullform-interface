@@ -94,14 +94,29 @@ export async function handleIntelGet(request: Request, deps: IntelDeps): Promise
       let cursor = new Date(0);
       let pingId: ReturnType<typeof setInterval> | null = null;
       let pollId: ReturnType<typeof setInterval> | null = null;
+      let errSeq = 0;
+      let lastErrCode: string | null = null;
+      let lastErrAt = 0;
 
-      const send = (event: string | null, data: unknown) => {
+      const send = (event: string | null, data: unknown, id?: string) => {
         if (closed) return;
         try {
-          controller.enqueue(encoder.encode(sseFrame(event, data)));
+          controller.enqueue(encoder.encode(sseFrame(event, data, id)));
         } catch {
           close();
         }
+      };
+      const sendError = (e: unknown, phase: "backfill" | "poll") => {
+        const message = redactErrorMessage(e);
+        // Deduplicate identical, rapid-fire errors within 1s so a flapping
+        // Prisma connection cannot drown out ping frames.
+        const code = `${phase}:${message}`;
+        const now = Date.now();
+        if (code === lastErrCode && now - lastErrAt < 1_000) return;
+        lastErrCode = code;
+        lastErrAt = now;
+        errSeq += 1;
+        send("error", { phase, message, seq: errSeq }, `err-${errSeq}`);
       };
       const close = () => {
         if (closed) return;
@@ -117,19 +132,8 @@ export async function handleIntelGet(request: Request, deps: IntelDeps): Promise
 
       request.signal.addEventListener("abort", close);
 
-      try {
-        const rows = await deps.prisma.terminalIntel.findMany({
-          orderBy: { createdAt: "desc" },
-          take: backfillTake,
-        });
-        send("backfill", rows);
-        if (rows.length) cursor = rows[0].createdAt;
-      } catch (e) {
-        send("error", { message: (e as Error).message });
-        close();
-        return;
-      }
-
+      // Ping cadence is established FIRST and never reset on errors, so the
+      // keepalive interval stays deterministic even if Prisma misbehaves.
       pingId = setI(() => {
         if (closed) return;
         try {
@@ -138,6 +142,19 @@ export async function handleIntelGet(request: Request, deps: IntelDeps): Promise
           close();
         }
       }, pingMs);
+
+      try {
+        const rows = await deps.prisma.terminalIntel.findMany({
+          orderBy: { createdAt: "desc" },
+          take: backfillTake,
+        });
+        send("backfill", rows);
+        if (rows.length) cursor = rows[0].createdAt;
+      } catch (e) {
+        sendError(e, "backfill");
+        close();
+        return;
+      }
 
       pollId = setI(async () => {
         if (closed) return;
@@ -152,7 +169,7 @@ export async function handleIntelGet(request: Request, deps: IntelDeps): Promise
             if (r.createdAt > cursor) cursor = r.createdAt;
           }
         } catch (e) {
-          send("error", { message: (e as Error).message });
+          sendError(e, "poll");
         }
       }, pollMs);
     },
