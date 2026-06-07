@@ -43,12 +43,36 @@ export function parseCookie(header: string | null, name: string) {
   return undefined;
 }
 
-export function sseFrame(event: string | null, data: unknown) {
+export function sseFrame(event: string | null, data: unknown, id?: string) {
   const lines: string[] = [];
+  if (id) lines.push(`id: ${id}`);
   if (event) lines.push(`event: ${event}`);
   lines.push(`data: ${JSON.stringify(data)}`);
   lines.push("", "");
   return lines.join("\n");
+}
+
+// Stable error envelope. Strips secrets, URLs, tokens, IPs, and long opaque
+// blobs before emission so an upstream Prisma/Postgres failure cannot leak
+// connection strings or API keys to the SSE client. Keeps short, snake_case
+// error codes (e.g. "prisma_timeout_backfill") intact for client routing.
+const SAFE_CODE = /^[a-z][a-z0-9_]{1,63}$/i;
+export function redactErrorMessage(input: unknown): string {
+  const raw = input instanceof Error ? input.message : String(input ?? "");
+  if (!raw) return "stream_error";
+  if (SAFE_CODE.test(raw.trim())) return raw.trim();
+  let msg = raw
+    .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "[REDACTED_URL]")
+    .replace(/prisma:\/\/[^\s"']+/gi, "[REDACTED_URL]")
+    .replace(/https?:\/\/[^\s"']+/gi, "[REDACTED_URL]")
+    .replace(/api[_-]?key=[^\s"'&]+/gi, "api_key=[REDACTED]")
+    .replace(/(?:bearer|token)\s+[A-Za-z0-9._\-]+/gi, "[REDACTED_TOKEN]")
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, "[REDACTED_IP]")
+    .replace(/[A-Za-z0-9_\-]{32,}/g, "[REDACTED]")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (msg.length > 200) msg = msg.slice(0, 200) + "…";
+  return msg || "stream_error";
 }
 
 export async function handleIntelGet(request: Request, deps: IntelDeps): Promise<Response> {
